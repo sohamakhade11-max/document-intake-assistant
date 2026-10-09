@@ -10,7 +10,8 @@ A small full-stack app: a chat interview on the left, the **structured state** o
 deterministic mock) only *proposes* updates; the backend validates every proposal, applies the valid ones, decides
 deterministically what to ask next, and generates the document **from state only**.
 
-It runs with **no API key** (default `LLM_PROVIDER=mock`).
+It runs with **no API key** (default `LLM_PROVIDER=mock`) and also works with a real model through any OpenAI-compatible
+API. It has been checked by hand against Google Gemini (`gemini-3.5-flash`); see [Using a real LLM](#using-a-real-llm).
 
 ## Architecture
 
@@ -58,7 +59,8 @@ backend/
     store.py           ConversationStore protocol + in-memory store
     config.py          env-based settings (read lazily; never crashes on missing key)
     llm/               base (contract+errors), parsing, prompt, mock, openai_provider, factory
-  tests/               behavioural tests, fixtures/llm_responses.json
+  tests/               61 behavioural tests (state, LLM output, conversation, document, API, provider HTTP/retries),
+                       fixtures/llm_responses.json
 frontend/src/          App, api client, ChatPanel, StatePanel, DocumentPanel
 AI_LOG.md   .env.example   .gitignore
 ```
@@ -126,6 +128,8 @@ Any OpenAI-compatible chat API works by changing four variables in `.env` (then 
    OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
    ```
 3. Restart the backend and check `http://127.0.0.1:8000/api/health` shows `"llm_provider":"openai","llm_configured":true`.
+   The UI header badge should read `LLM: openai`. If it reads `mock`, your `.env` was not picked up (check the file name
+   and that `LLM_PROVIDER` is exactly `openai`).
 
 Notes from testing:
 - **Model names change and differ per key.** A name listed by the models endpoint can still return 404 for chat
@@ -154,7 +158,7 @@ Failure-injection tags (start a message with one): `[mock:malformed]`, `[mock:in
 ## Running tests
 
 ```bash
-cd backend && source .venv/bin/activate && pytest
+cd backend && source .venv/bin/activate && pytest     # 61 tests; none call a live API
 cd ../frontend && npm run build      # typecheck + production build
 ```
 
@@ -236,6 +240,8 @@ I deliberately dropped a model-supplied `ready_to_generate` flag: completeness i
 - **Provider abstraction.** `LLMProvider.process_message(LLMRequest) -> raw text`. Mock, OpenAI-compatible and test
   doubles all go through identical parsing/validation. Swapping providers = implement one method + register it in
   `llm/factory.py`.
+- **Retries live inside the provider.** `OpenAICompatibleProvider` retries 429/5xx up to 3 times with linear backoff
+  (non-transient errors such as 401/404 fail immediately); the service layer never sees the retries.
 - **Mock mode** exists so the app is fully demoable and testable offline. Real behaviour (with the model) is
   broader than the mock's regex rules.
 - **In-memory store** behind `ConversationStore` for simplicity. State is lost on restart (the UI starts a new
@@ -253,6 +259,7 @@ I deliberately dropped a model-supplied `ready_to_generate` flag: completeness i
 | Unknown field / unsupported evidence | update rejected and reported |
 | Transient upstream error (429 / 5xx) | Retried up to 3 times with backoff; if it still fails: `502` "busy, try again", turn not recorded, input preserved in UI |
 | Timeout / other upstream error (e.g. 401, 404) | `504` / `502` immediately (not retried), turn not recorded, input preserved in UI |
+| Unknown `LLM_PROVIDER` value (e.g. `gemini`) | falls back to the mock with a log warning only (known weakness; check the UI badge or `/health`) |
 | Missing API key | app starts; `/health` reports not configured; messages → `503`; UI banner |
 | Unexpected exception | generic `500`; stack trace logged server-side only |
 
@@ -260,17 +267,24 @@ Logs contain conversation ids, field names and error categories, **not** user me
 
 ## Production improvements (not implemented)
 
-Persistent store (PostgreSQL) and Redis for sessions/locks; authentication and per-user ownership of conversations;
-encryption at rest and retention/deletion policy for personal data; rate limiting and request-size/cost budgets;
-structured logging, tracing and metrics (token usage, rejection rates); provider/model fallback, jittered retries and circuit breaking (only simple bounded retries exist today);
-JSON-schema/tool-calling structured outputs from the provider instead of JSON mode; an append-only audit trail of
-state changes; prompt versioning and an offline eval set (the `PROMPT_VERSION` constant is only a stub);
-stronger semantic validation (address/name checks, duplicate detection); a per-conversation lock that works across
-processes (the current one is per-process); accessibility review and frontend tests; real legal review before
-anything resembling a real document.
+None of the following exists in this version; in rough priority order:
+
+- **Persistence:** PostgreSQL for conversations/state and Redis for sessions and cross-process locks (the current lock and
+  store are per-process and in-memory).
+- **Security and privacy:** authentication and per-user ownership, encryption at rest, retention/deletion policy,
+  secrets manager, and no real personal data sent to free-tier LLMs.
+- **LLM reliability:** provider-native structured output / tool calling instead of JSON mode, model/provider fallback,
+  jittered retries and circuit breaking (only simple bounded retries exist today), and failing loudly on an unknown
+  `LLM_PROVIDER` instead of falling back to the mock.
+- **Evaluation and prompt management:** an offline eval set, prompt versioning (`PROMPT_VERSION` is only a stub), and
+  metrics on rejected updates, evidence-rule drops and malformed responses.
+- **Operations:** structured logging, tracing and metrics, rate limiting, token/cost budgets, request-size limits.
+- **Auditability:** an append-only audit trail of state changes.
+- **Product quality:** stronger semantic validation (names, addresses), multilingual extraction, frontend tests,
+  accessibility review, and real legal review before anything resembling a real document.
 
 ## Known limitations
 
-Real-model behaviour has been checked by hand against Gemini (`gemini-3.5-flash`) only, with no automated tests against a live API; provider HTTP behaviour (retries, errors) is covered by tests using a mock transport. The mock extractor is English-only and rule-based. The in-memory store and locks are single-process. Prompt-injection
+An unknown `LLM_PROVIDER` silently falls back to the mock. Real-model behaviour has been checked by hand against Gemini (`gemini-3.5-flash`) only, with no automated tests against a live API; provider HTTP behaviour (retries, errors) is covered by tests using a mock transport. The mock extractor is English-only and rule-based. The in-memory store and locks are single-process. Prompt-injection
 defences are limited to treating user text as data, strict schema validation and the evidence rule; no moderation is
 performed. Gifts record a free-text description and recipient only. The executor's address is intentionally not stored.
