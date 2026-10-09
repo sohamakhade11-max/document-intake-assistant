@@ -1,0 +1,15 @@
+# Copy to .env (never commit .env). The app works with the defaults below.
+
+# "mock" (default, no API key needed) or "openai" (any OpenAI-compatible chat API)
+LLM_PROVIDER=mock
+
+# Only used when LLM_PROVIDER=openai
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# Seconds to wait for the model before returning a friendly timeout error
+LLM_TIMEOUT_SECONDS=30
+
+# Comma-separated list of allowed browser origins for CORS
+CORS_ORIGINS=http://localhost:5173
