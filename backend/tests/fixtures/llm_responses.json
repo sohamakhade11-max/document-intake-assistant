@@ -1,0 +1,49 @@
+{
+  "valid_single": {
+    "user_message": "My name is Jane Smith",
+    "raw": {"acknowledgement": "Thanks.", "updates": [{"field": "full_name", "value": "Jane Smith", "evidence": "Jane Smith"}]}
+  },
+  "valid_multi": {
+    "user_message": "My brother James. I have two children, Sarah and Daniel.",
+    "raw": {"acknowledgement": "Noted.", "updates": [
+      {"field": "executor.name", "value": "James", "evidence": "James"},
+      {"field": "executor.relationship", "value": "brother", "evidence": "brother"},
+      {"field": "has_children", "value": true, "evidence": "I have two children"},
+      {"field": "children", "value": ["Sarah", "Daniel"], "evidence": "Sarah and Daniel"}]}
+  },
+  "ambiguous": {
+    "user_message": "I want everything to go to my wife.",
+    "raw": {"acknowledgement": "", "updates": [], "needs_clarification": [{"field": "specific_gifts", "question": "Which item should go to your wife?"}]}
+  },
+  "contradictory": {
+    "user_message": "Divide everything between my two children.",
+    "raw": {"acknowledgement": "", "updates": [{"field": "has_children", "value": true, "evidence": "my two children"}]}
+  },
+  "correction": {
+    "user_message": "Actually my address is 22 Main Street.",
+    "raw": {"acknowledgement": "Updated.", "updates": [{"field": "home_address", "value": "22 Main Street", "is_correction": true, "evidence": "my address is 22 Main Street"}]}
+  },
+  "invalid_type": {
+    "user_message": "Jane",
+    "raw": {"acknowledgement": "ok", "updates": [{"field": "full_name", "value": 123456, "evidence": "Jane"}]}
+  },
+  "string_boolean": {
+    "user_message": "yes worldwide",
+    "raw": {"acknowledgement": "ok", "updates": [{"field": "covers_worldwide_assets", "value": "yes", "evidence": "yes worldwide"}]}
+  },
+  "invented_fact": {
+    "user_message": "My executor is James",
+    "raw": {"acknowledgement": "ok", "updates": [
+      {"field": "executor.name", "value": "James", "evidence": "executor is James"},
+      {"field": "executor.relationship", "value": "brother", "evidence": "my brother"}]}
+  },
+  "unknown_field": {
+    "user_message": "My phone is 555",
+    "raw": {"acknowledgement": "ok", "updates": [{"field": "phone", "value": "555", "evidence": "555"}]}
+  },
+  "missing_keys": {"user_message": "hello", "raw": {"acknowledgement": "hi"}},
+  "wrong_shape": {"user_message": "hello", "raw": {"acknowledgement": "hi", "updates": "none"}},
+  "malformed_text": {"user_message": "hello", "raw_text": "Sure! {\"acknowledgement\": "},
+  "not_an_object": {"user_message": "hello", "raw_text": "[1, 2, 3]"},
+  "fenced_json": {"user_message": "My name is Jane Smith", "raw_text": "```json\n{\"acknowledgement\": \"ok\", \"updates\": []}\n```"}
+}
